@@ -1,0 +1,268 @@
+*----------------------------------------------------------------------*
+***INCLUDE LZC1FG03PP0001F01.
+*----------------------------------------------------------------------*
+FORM before_save.
+
+  CONSTANTS : l_name TYPE string VALUE 'N_____'.
+  DATA : l_index LIKE sy-tabix.
+  DATA : ls_component TYPE abap_componentdescr,
+         lt_component TYPE abap_component_tab,
+
+         lr_structure TYPE REF TO cl_abap_structdescr,
+         lr_handle    TYPE REF TO data,
+         lr_before    TYPE REF TO data,
+         lr_change    TYPE REF TO data,
+         lr_move      TYPE REF TO data.
+
+  FIELD-SYMBOLS : <l_structure> TYPE any,
+                  <l_field>     TYPE any,
+                  <ls_change>   TYPE any,
+                  <lv_view>     TYPE any.
+
+*-- Get data
+  lr_structure  ?=
+     cl_abap_structdescr=>describe_by_name( x_header-viewname ).
+  lt_component = lr_structure->get_components( ).
+  ls_component-type ?= cl_abap_datadescr=>describe_by_data( <action> ).
+  ls_component-name = l_name.
+  APPEND ls_component TO lt_component.
+
+  lr_structure = cl_abap_structdescr=>create( lt_component ).
+
+  CREATE DATA lr_handle TYPE HANDLE lr_structure.
+  ASSIGN lr_handle->* TO <l_structure>.
+
+
+*-- Set user, time, date
+  LOOP AT total.
+
+    IF <action> = neuer_eintrag OR <action> = aendern.
+
+      READ TABLE extract WITH KEY <vim_xtotal_key>.
+
+      IF sy-subrc EQ 0.
+        l_index = sy-tabix.
+      ELSE.
+        CLEAR l_index.
+      ENDIF.
+
+      CHECK l_index GT 0.
+      MOVE-CORRESPONDING total TO <l_structure>.
+
+      CASE <action>.
+        WHEN aendern. "Change/Update
+          ASSIGN COMPONENT 'AEDAT' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-datum TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'AEZET' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-uzeit TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'AENAM' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-uname TO <l_field>.
+          ENDIF.
+
+        WHEN neuer_eintrag. "New Entries
+          ASSIGN COMPONENT 'MANDT' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-mandt TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'ERDAT' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-datum TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'ERZET' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-uzeit TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'ERNAM' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE sy-uname TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'AEDAT' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE space TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'AEZET' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE  space TO <l_field>.
+          ENDIF.
+
+          ASSIGN COMPONENT 'AENAM' OF STRUCTURE <l_structure>
+                                             TO <l_field>.
+          IF sy-subrc = 0.
+            MOVE space TO <l_field>.
+          ENDIF.
+      ENDCASE.
+
+      MOVE-CORRESPONDING <l_structure> TO total.
+      MODIFY total.
+      extract = total.
+      MODIFY extract INDEX l_index.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_popup_to_confirm
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_popup_to_confirm USING pv_title.
+
+  CLEAR gv_answer.
+  CALL FUNCTION 'ZC1F030001'
+    EXPORTING
+      iv_action       = pv_title
+   IMPORTING
+     EV_ANSWER       = gv_answer.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_data .
+
+  SELECT SINGLE
+    FROM zc103fit0011
+    FIELDS empname
+    WHERE empno = @gv_empno
+    INTO  @gv_empname.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form create_object_0120
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM create_object_0210 .
+
+  IF go_text_con IS NOT BOUND.
+
+    CREATE OBJECT go_text_con
+      EXPORTING
+        container_name = 'TEXT_CON'.
+
+    CREATE OBJECT go_text_edit
+      EXPORTING
+*       wordwrap_mode = 2 " cl_gui_textedit=>wordwrap_at_windowborder " 0: OFF; 1: wrap a window border; 2: wrap at fixed position
+        wordwrap_mode = cl_gui_textedit=>wordwrap_at_windowborder " 0: OFF; 1: wrap a window border; 2: wrap at fixed position
+        parent        = go_text_con.
+
+*-- Text eidt Toolbar mode
+    go_text_edit->set_toolbar_mode(
+      EXPORTING
+        toolbar_mode           = 1           " visibility of toolbar; eq 0: OFF ; ne 0: ON
+    ).
+
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_text
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM set_text .
+
+*-- 자동 들여쓰기
+  go_text_edit->set_autoindent_mode(
+    EXPORTING
+      auto_indent             = 1                 " TRUE (1): enable; ne 1: disable
+    EXCEPTIONS
+      error_cntl_call_method  = 1
+      OTHERS                  = 2
+  ).
+
+*-- 기존 작성된 내역 삭제
+  go_text_edit->delete_text(
+    EXCEPTIONS
+      error_cntl_call_method = 1                " Error while setting property of TextEdit control!
+      OTHERS                 = 2
+  ).
+
+*-- 읽어들인 내용 Setting
+  go_text_edit->set_selected_text_as_r3table(
+    EXPORTING
+      table                         = gt_text                 " text as table
+      enable_editing_protected_text = 0            " editing of protected text; eq 0: OFF ; ne 0: ON
+    EXCEPTIONS
+      error_dp                      = 1                " Error while sending selected text table to TextEdit control
+      error_dp_create               = 2                " ERROR_DP_CREATE
+      OTHERS                        = 3
+  ).
+
+*-- Display mode change
+  go_text_edit->set_readonly_mode(
+    EXPORTING
+      readonly_mode          = 0
+  ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form save_comment
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM save_comment .
+
+  go_text_edit->get_text_as_r3table(
+    IMPORTING
+      table                  = gt_text                 " text as R/3 table
+    EXCEPTIONS
+      error_dp               = 1                " Error while retrieving text table via DataProvider control!
+      error_cntl_call_method = 2                " Error while retrieving a property from TextEdit control
+      error_dp_create        = 3                " Error while creating DataProvider Control
+      potential_data_loss    = 4                " Potential data loss: use get_text_as_stream instead
+      OTHERS                 = 5
+  ).
+
+  CLEAR gv_str.
+  LOOP AT gt_text ASSIGNING FIELD-SYMBOL(<fs>).
+
+    gv_str = |{ gv_str }{ <fs>-tdline }|.
+
+  ENDLOOP.
+
+  COMMIT WORK.
+
+ENDFORM.
+
+----------------------------------------------------------------------------------
+Extracted by Direct Download Enterprise version 1.3.1 - E.G.Mellodew. 1998-2005 UK. Sap Release 758
